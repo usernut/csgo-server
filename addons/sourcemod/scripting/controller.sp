@@ -16,23 +16,160 @@
 Users users;
 Http http;
 
-bool isDataLoaded = false;
-bool isMatchStarted = false;
-bool isTeamSwitched = false;
-
-int total_users;
-int game_id;
-
 methodmap Game < StringMap {
-    public Game(int game_id, int total_users) {
+    public Game() {
         Game self = view_as<Game>(new StringMap());
         
-        self.SetValue("game_id", game_id);
-        self.SetValue("total_users", total_users);
+        self.SetValue("id", 0);
+        self.SetValue("total_users", 0);
+        self.SetValue("status", 0); // 0 - warmup, 1 - started, 2 - end
+        self.SetValue("switched", false);
 
         return self;
     }
+
+    property int id {
+        public get() {
+            int id;
+            this.GetValue("id", id);
+            return id;
+        }
+    }
+
+    property int total_users {
+        public get() {
+            int total_users;
+            this.GetValue("total_users", total_users);
+            return total_users;
+        }
+    }
+
+    property int status {
+        public get() {
+            int status;
+            this.GetValue("status", status);
+            return status;
+        }
+        public set(int status) {
+            this.SetValue("status", status);
+        }
+    }
+
+    property bool switched {
+        public get() {
+            bool switched;
+            this.GetValue("switched", switched);
+            return switched;
+        }
+    }
+
+    public void switchTeams() {
+        this.SetValue("switched", !this.switched);
+    }
+
+    public void setData(int id, int total_users) {
+        this.SetValue("id", id);
+        this.SetValue("total_users", total_users);
+    }
+
+    public void clear() {
+        this.SetValue("id", 0);
+        this.SetValue("total_users", 0);
+        this.SetValue("status", 0);
+        this.SetValue("switched", false);
+        
+        users.Clear();
+    }
+
+    public void init() {
+        if(this.id != 0) return;
+
+        http.post("{\"t\": 1}", getDataCallback);
+        ServerCommand("bot_kick");
+    }
+
+    public void start() {
+        char json[128];
+
+        Format(json, sizeof(json), "{\"t\":2,\"data\":{\"game_id\": %i}}", this.id);
+        http.post(json, defaultCallback);
+
+        this.status = 1;
+
+        PrintToChatAll("Игра началась");
+    }
+
+    public void cancel() {
+        char json[512];
+        char unconnected[512];
+        JSON_Array arr = new JSON_Array();
+
+        for (int j = 0; j < users.Length; j++) {
+            char playerSteamid[32];
+            User user = users.Get(j);
+
+            user.steamid(playerSteamid, sizeof(playerSteamid));
+
+            if (!isUserInGame(playerSteamid)) {
+                arr.PushInt(user.user_id);
+            }
+        }
+
+        arr.Encode(unconnected, sizeof(unconnected));
+        json_cleanup_and_delete(arr);
+
+        Format(json, sizeof(json), "{\"t\":6,\"data\":{\"game_id\": %i,\"unconnected\": %s}}", this.id, unconnected);
+        http.post(json, defaultCallback); 
+
+        this.clear();
+        // KickAllPlayers(15.0, "Game canceled"); 
+        //TODO: Включить финальную сцену
+    }
+
+    public void startOrCancel() {
+        if (GetRealClientsCount() != this.total_users) {
+            this.cancel();
+            return;
+        }
+        this.start();
+    }
+
+    public void end() {
+        char json[512];
+        char message[128] = "The match is over. Thanks for the game!";
+
+        int winner = 0;
+        int team0 = CS_GetTeamScore(CS_TEAM_CT);
+        int team1 = CS_GetTeamScore(CS_TEAM_T);
+
+        if (team1 > team0) winner = 1;
+        // TODO: отправлять статистику игроков
+        Format(json, sizeof(json), "{\"t\":4,\"data\":{\"game_id\": %i,\"team\": %i}}", this.id, winner);
+        http.post(json, defaultCallback);
+
+        this.clear();
+
+        PrintToChatAll(message);
+        KickAllPlayers(15.0, message);
+    }
+
+    public void sendScore() {
+        ArrayList score = new ArrayList();
+
+        score.Push(CS_GetTeamScore(CS_TEAM_T));
+        score.Push(CS_GetTeamScore(CS_TEAM_CT));
+
+        if (this.switched) { 
+            score.SwapAt(0, 1);
+        }
+
+        char json[128];
+        Format(json, sizeof(json), "{\"t\":3,\"data\":{\"game_id\": %i,\"scores\": [%i, %i]}}", this.id, score.Get(0), score.Get(1));
+        http.post(json, defaultCallback);
+    }
 }
+
+Game game;
 
 public void OnPluginStart() {
     HookEvent("round_start", RoundStart);
@@ -46,33 +183,35 @@ public void OnPluginStart() {
 
     users = new Users();
     http = new Http("http://127.0.0.1:3001/api/server/");
+    game = new Game();
 
     ///////////////////// delete after testing
     RegConsoleCmd("sm_test", test);
-    http.send("{\"t\": 1}", getDataCallback);
+    game.init();
     /////////////////////
 }
 
 
 public void OnMapStart () {
     GameRules_SetProp("m_bIsQueuedMatchmaking", 1);
-    isMatchStarted = false;
-    isTeamSwitched = false;
+    game.clear();
 }
 
 public Action test(int client, int args) {
-    // CS_TerminateRound(0.0, CSRoundEnd_Draw);
+    int team = users.getDataByClient(client, "team");
 
-    int team = users.getDataByClient(client, "user_id");
-    PrintToChatAll("%i", team);
-
-    // PrintToChatAll("%i", client);
-
+    PrintToServer("value %i, T: %i, CT: %i", !team, CS_TEAM_T, CS_TEAM_CT);
+    ChangeClientTeam(client, team + 2);    
+    // new ent = CreateEntityByName("game_end");
+    // DispatchSpawn(ent);
+    // AcceptEntityInput(ent, "EndGame");
     // m_iMatchStats_HeadShotKills_Total
     // GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_HeadShotKills_Total", _, client);
     // int avg =  GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_Kills_Total", _, client);
     // PrintToChatAll("avg: %i", GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_HeadShotKills_Total", _, client));
 }
+
+
 
 public int setGameDataFromHTTP(const char[] body, any args) {
     PrintToServer("%s", body);
@@ -80,12 +219,15 @@ public int setGameDataFromHTTP(const char[] body, any args) {
     JSON_Object obj = json_decode(body);
     JSON_Object data = obj.GetObject("data");
 
-    // TODO: if data === null |> return
+    if(data == null) {
+        json_cleanup_and_delete(obj);
+        // TODO: game end
+        return;
+    }
 
     JSON_Array members = view_as<JSON_Array>(data.GetObject("members"));
 
-    game_id = data.GetInt("game_id");
-    total_users = data.GetInt("total_users");
+    game.setData(data.GetInt("game_id"), data.GetInt("total_users"));
 
     for (int i = 0; i < members.Length; i++) {
         JSON_Array member = view_as<JSON_Array>(members.GetObject(i));
@@ -95,19 +237,18 @@ public int setGameDataFromHTTP(const char[] body, any args) {
         users.Push(user);
     }
 
-    // json_cleanup_and_delete(obj);
+    // json_cleanup_and_delete(obj); TODO: переписать на StringMap
 
-    ServerCommand("mp_endwarmup_player_count %i", total_users);
-    isDataLoaded = true;
+    ServerCommand("mp_endwarmup_player_count %i", game.total_users);
 }
 
 public bool OnClientConnect(int client, char[] rejectmsg, int maxlen) {
-    // if (!isDataLoaded) {
-    //     strcopy(rejectmsg, maxlen, "Your SteamID is not allowed");
-    //     return false;
-    // }
+    if (game.id == 0) {
+        strcopy(rejectmsg, maxlen, "Your SteamID is not allowed");
+        return false;
+    }
 
-    // int team = getMemberInfo(ArrMembers, client, "team");
+    // int team = users.getDataByClient(client, "team");
 
     // if (team == -1) {
     //     strcopy(rejectmsg, maxlen, "Your SteamID is not allowed. Make sure you are logged in with the correct account");
@@ -118,128 +259,49 @@ public bool OnClientConnect(int client, char[] rejectmsg, int maxlen) {
 }
 
 public Action joingame(int client, const char[] command, args) {    
-    // int team = getMemberInfo(ArrMembers, client, 1);
+    int team = users.getDataByClient(client, "team");
 
-    // if (team == -1) {
-    //     KickClient(client, "Your SteamID is not allowed. Make sure you are logged in with the correct account");
-    //     return;
-    // }
-    // 
-    // team == 0 && !isTeamSwitched || team == 1 && isTeamSwitched ?
-    //     ChangeClientTeam(client, CS_TEAM_T) :
-    //     ChangeClientTeam(client, CS_TEAM_CT);
+    if (team == -1) {
+        KickClient(client, "Your SteamID is not allowed. Make sure you are logged in with the correct account");
+        return;
+    }
+    
+    if (game.switched) {
+        team = !team;
+    }
+
+    ChangeClientTeam(client, team + 2);
 } 
 
 public Action RoundEnd(Event event, const char[] name, bool dontBroadcast) {
-    // int team = GetEventInt(event, "winner");
-
     if (IsWarmup()) {
         return;
     }
     
-    //TODO: отправлять счет
-    int T0Score = CS_GetTeamScore(CS_TEAM_T);
-    int T1Score = CS_GetTeamScore(CS_TEAM_CT);
-
-    if (isTeamSwitched) { 
-        T0Score = CS_GetTeamScore(CS_TEAM_CT);
-        T1Score = CS_GetTeamScore(CS_TEAM_T);
-    }
-
-    char json[128];
-    Format(json, sizeof(json), "{\"t\":1,\"data\":{\"game_id\": %i,\"scores\": [%i, %i]}}", game_id, T0Score, T1Score);
-    http.send(json, defaultCallback);
+    game.sendScore();
 
     if (isHalfTime()) {
-        isTeamSwitched = !isTeamSwitched;
-        PrintToChatAll("switched");    
+        game.switchTeams();
     }
 }
 
 public Action RoundStart(Event event, const char[] name, bool dontBroadcast) {
+    // Начало карты
     if(IsWarmup()) {
-        initGame();
+        game.init();
         return;
     }
-
-    if (!isMatchStarted) {
-        startGame();
+    // Начало первого раунда
+    if (game.status == 0) {
+        game.startOrCancel();
         return;
     }
 }
 
 public Action GameEnd(Event event, const char[] name, bool dontBroadcast) {
-    PrintToChatAll("The match is over. Thanks for the game!");
-    /*
-        Определяем какая команда победила и отправляем запрос на сервер
-        Выставляем статус игры 
-        Выдаем деньги победителям
-        Меняем статус сервера на свободен
-        Статус команд у одной меняем на проиграла у другой на выиграла
-    */
-    // CreateTimer(7.0, KickAllPlayers);
-}
-
-public void initGame() {
-    if(isDataLoaded) return;
-
-    http.send("{\"t\": 1}", getDataCallback);
-    ServerCommand("bot_kick");
-}
-
-public void startGame() {
-    if (GetRealClientsCount() != 1/*total_users*/) {
-        http.send("{\"t\": 5}", defaultCallback); //Отправить не подключенных людей
-        PrintToChatAll("Game canceled"); //TODO: заменить на KickAllPlayers("Game canceled");
+    //У игры статус cancel
+    if (game.id == 0) {
         return;
     }
-    isMatchStarted = true;
-    http.send("{\"t\": 2}", defaultCallback);
-    PrintToChatAll("Игра началась");
+    game.end();
 }
-
-  
-  
-// #include <sourcemod>
-// #include <sdktools>
-// #include <cstrike>
-// #include <ripext>
-// #include <json>
-
-// public void OnPluginStart() {
-// 	sendHttp()
-// }
-
-// public void sendHttp() {
-//     char output[1024];
-
-//     PrintToServer("[CSGO Remote] Round End!");
-
-//     HTTPClient http = new HTTPClient("http://127.0.0.1:3001");
-// 	http.SetHeader("Accept", "application/json");
-// 	http.SetHeader("Content-Type", "application/json");
-
-
-//     JSON_Object main = new JSON_Object();
-//     main.SetString("strkey", "fuck ripext");
-//     main.SetInt("intkey", 1651);
-
-//     main.Encode(output, sizeof(output));
-//     main.Cleanup();
-
-//     delete main;
-
-//     JSON obj = JSONObject.FromString(output);
-//     http.Post("/api/mm/test", obj, OnRESTCall);
-
-//     delete http
-// }
-
-// public void OnRESTCall(HTTPResponse response, any value) {
-//     if (response.Status != HTTPStatus_OK) {
-//         PrintToServer("[CSGO Remote] REST Failed!");
-//         return;
-//     }
-
-//     PrintToServer("[CSGO Remote] REST Success!");
-// }
