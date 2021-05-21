@@ -123,7 +123,7 @@ methodmap Game < StringMap {
 
         this.clear();
         // KickAllPlayers(15.0, "Game canceled"); 
-        //TODO: Включить финальную сцену
+        //TODO: game end
     }
 
     public void startOrCancel() {
@@ -197,14 +197,11 @@ public void OnMapStart () {
     game.clear();
 }
 
-public Action test(int client, int args) {
-    int team = users.getDataByClient(client, "team");
+public Action test(int client, int args) { 
+    new ent = CreateEntityByName("game_end");
+    DispatchSpawn(ent);
+    AcceptEntityInput(ent, "EndGame");
 
-    PrintToServer("value %i, T: %i, CT: %i", !team, CS_TEAM_T, CS_TEAM_CT);
-    ChangeClientTeam(client, team + 2);    
-    // new ent = CreateEntityByName("game_end");
-    // DispatchSpawn(ent);
-    // AcceptEntityInput(ent, "EndGame");
     // m_iMatchStats_HeadShotKills_Total
     // GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_HeadShotKills_Total", _, client);
     // int avg =  GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_Kills_Total", _, client);
@@ -242,26 +239,25 @@ public int setGameDataFromHTTP(const char[] body, any args) {
     ServerCommand("mp_endwarmup_player_count %i", game.total_users);
 }
 
-public bool OnClientConnect(int client, char[] rejectmsg, int maxlen) {
+public void OnClientAuthorized(int client, const char[] auth) {
     if (game.id == 0) {
-        strcopy(rejectmsg, maxlen, "Your SteamID is not allowed");
-        return false;
+        KickClient(client, "Your SteamID is not allowed");
+        return;
     }
 
-    // int team = users.getDataByClient(client, "team");
+    int team = users.getDataByClient(client, "team");
 
-    // if (team == -1) {
-    //     strcopy(rejectmsg, maxlen, "Your SteamID is not allowed. Make sure you are logged in with the correct account");
-    //     return false;
-    // }
-
-    return true;
+    if (team != 0 && team != 1) {
+        KickClient(client, "Your SteamID is not allowed. Make sure you are logged in with the correct account");
+        return;
+    }
 }
 
+// --- ready ---
 public Action joingame(int client, const char[] command, args) {    
     int team = users.getDataByClient(client, "team");
 
-    if (team == -1) {
+    if (team != 0 && team != 1) {
         KickClient(client, "Your SteamID is not allowed. Make sure you are logged in with the correct account");
         return;
     }
