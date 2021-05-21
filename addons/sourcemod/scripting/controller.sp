@@ -191,7 +191,6 @@ public void OnPluginStart() {
     /////////////////////
 }
 
-
 public void OnMapStart () {
     GameRules_SetProp("m_bIsQueuedMatchmaking", 1);
     game.clear();
@@ -207,8 +206,6 @@ public Action test(int client, int args) {
     // int avg =  GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_Kills_Total", _, client);
     // PrintToChatAll("avg: %i", GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_HeadShotKills_Total", _, client));
 }
-
-
 
 public int setGameDataFromHTTP(const char[] body, any args) {
     PrintToServer("%s", body);
@@ -245,6 +242,8 @@ public void OnClientAuthorized(int client, const char[] auth) {
         return;
     }
 
+    if (!IsPlayer(client)) return;
+
     int team = users.getDataByClient(client, "team");
 
     if (team != 0 && team != 1) {
@@ -253,7 +252,6 @@ public void OnClientAuthorized(int client, const char[] auth) {
     }
 }
 
-// --- ready ---
 public Action joingame(int client, const char[] command, args) {    
     int team = users.getDataByClient(client, "team");
 
@@ -262,9 +260,7 @@ public Action joingame(int client, const char[] command, args) {
         return;
     }
     
-    if (game.switched) {
-        team = !team;
-    }
+    if (game.switched) team = !team;
 
     ChangeClientTeam(client, team + 2);
 } 
