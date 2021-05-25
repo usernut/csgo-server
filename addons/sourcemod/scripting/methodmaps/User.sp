@@ -1,4 +1,8 @@
-methodmap User < JSON_Object {
+methodmap User < JSON_Object {    
+    public User() {
+        return view_as<User>(new JSON_Object());
+    }
+
     property int team {
         public get() {
             return this.GetInt("team");
@@ -17,9 +21,5 @@ methodmap User < JSON_Object {
 
     public int getIntPropertyByName(char[] prop) {
         return this.GetInt(prop);
-    }
-
-    public User() {
-        return view_as<User>(new JSON_Object());
     }
 }
