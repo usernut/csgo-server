@@ -1,17 +1,25 @@
-methodmap Users < ArrayList {
+methodmap Users < ArrayList {    
+    public Users() {
+        return view_as<Users>(new ArrayList());
+    }
+
     public void Push(User user) {
         this.Push(user);
     }
 
-    public void print() {
-        for (int j = 0; j < this.Length; j++) {
-            User user = this.Get(j);
-
-            char output[512];
-            user.Encode(output, sizeof(output));
-            PrintToServer("%s", output);
-        }
+    public void Clear() {
+        this.Clear();
     }
+
+    // public void print() {
+    //     for (int j = 0; j < this.Length; j++) {
+    //         User user = this.Get(j);
+
+    //         char output[512];
+    //         user.Encode(output, sizeof(output));
+    //         PrintToServer("%s", output);
+    //     }
+    // }
 
     public int getDataByClient(int client, char[] prop) {
         char clientSteamid[32];
@@ -23,16 +31,12 @@ methodmap Users < ArrayList {
             User user = this.Get(i);
 
             user.steamid(playerSteamid, sizeof(playerSteamid));
-
+            
             if(!StrEqual(playerSteamid, clientSteamid)) continue;
 
             return user.getIntPropertyByName(prop);
         }
 
         return -1;
-    }
-
-    public Users() {
-        return view_as<Users>(new ArrayList());
     }
 }
