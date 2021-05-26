@@ -22,7 +22,7 @@ methodmap Game < StringMap {
         
         self.SetValue("id", 0);
         self.SetValue("total_users", 0);
-        self.SetValue("status", 0); // 0 - warmup, 1 - started, 2 - end
+        self.SetValue("status", 0); // 0 - warmup, 1 - started
         self.SetValue("switched", false);
 
         return self;
@@ -90,6 +90,8 @@ methodmap Game < StringMap {
 
     public void start() {
         char json[128];
+        
+        if(this.id == 0) return;
 
         Format(json, sizeof(json), "{\"t\":2,\"data\":{\"game_id\": %i}}", this.id);
         http.post(json, defaultCallback);
@@ -121,9 +123,8 @@ methodmap Game < StringMap {
         Format(json, sizeof(json), "{\"t\":6,\"data\":{\"game_id\": %i,\"unconnected\": %s}}", this.id, unconnected);
         http.post(json, defaultCallback); 
 
-        this.clear();
-        // KickAllPlayers(15.0, "Game canceled"); 
-        //TODO: game end
+        forceEndGame();
+        KickAllPlayers(15.0, "Game canceled"); 
     }
 
     public void startOrCancel() {
@@ -159,9 +160,7 @@ methodmap Game < StringMap {
         score.Push(CS_GetTeamScore(CS_TEAM_T));
         score.Push(CS_GetTeamScore(CS_TEAM_CT));
 
-        if (this.switched) { 
-            score.SwapAt(0, 1);
-        }
+        if (this.switched) score.SwapAt(0, 1);
 
         char json[128];
         Format(json, sizeof(json), "{\"t\":3,\"data\":{\"game_id\": %i,\"scores\": [%i, %i]}}", this.id, score.Get(0), score.Get(1));
@@ -175,7 +174,6 @@ public void OnPluginStart() {
     HookEvent("round_start", RoundStart);
     HookEvent("round_end", RoundEnd);
     HookEvent("cs_intermission", GameEnd);
-    // HookEvent("player_say", PlayerSay);
 
     AddCommandListener(joingame, "joingame");
     AddCommandListener(jointeam, "jointeam");
@@ -191,20 +189,49 @@ public void OnPluginStart() {
     /////////////////////
 }
 
-public void OnMapStart () {
+public OnMapStart () {
     GameRules_SetProp("m_bIsQueuedMatchmaking", 1);
     game.clear();
 }
 
-public Action test(int client, int args) { 
+public void forceEndGame() {
+    if (game.id != 0) game.clear();
+
     new ent = CreateEntityByName("game_end");
     DispatchSpawn(ent);
     AcceptEntityInput(ent, "EndGame");
+}
 
-    // m_iMatchStats_HeadShotKills_Total
-    // GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_HeadShotKills_Total", _, client);
-    // int avg =  GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_Kills_Total", _, client);
-    // PrintToChatAll("avg: %i", GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_HeadShotKills_Total", _, client));
+public Action test(int client, int args) { 
+    // CS_TerminateRound(0.0, CSRoundEnd_TerroristsSurrender);
+
+    int kills = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iKills", _, client);
+	int assists = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iAssists", _, client);
+	int deaths = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iDeaths", _, client);
+    int total_kills = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_Kills_Total", _, client);
+    int hs = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_HeadShotKills_Total", _, client);
+    int dmg = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_Damage_Total", _, client);
+    int ud = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_UtilityDamage_Total", _, client);
+    int ef = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_EnemiesFlashed_Total", _, client);
+    int mvps = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMVPs", _, client);
+	int score = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iScore", _, client);
+
+    PrintToServer("k: %i, t_k: %i, a: %i, d: %i, hs: %i, dmg: %i, ud: %i, ef: %i, mvps: %i, score: %i", kills, total_kills, assists, deaths, hs, dmg, ud, ef, mvps, score);
+
+    SetEntProp(client, Prop_Data, "m_iFrags", 0);
+	CS_SetClientAssists(client, 0);
+	SetEntProp(client, Prop_Data, "m_iDeaths", 0);
+
+    // SetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_Kills_Total", 3, _, client);
+    // SetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_HeadShotKills_Total", 3, _, client);
+    // SetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_Damage_Total", 300, _, client);
+    // SetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_UtilityDamage_Total", 42, _, client);
+    // SetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iMatchStats_EnemiesFlashed_Total", 2, _, client);
+
+    // CS_SetMVPCount(client, 3);
+	// CS_SetClientContributionScore(client, 4);
+
+    // m_iMatchStats_3k_Total m_iMatchStats_4k_Total m_iMatchStats_5k_Total
 }
 
 public int setGameDataFromHTTP(const char[] body, any args) {
@@ -215,14 +242,14 @@ public int setGameDataFromHTTP(const char[] body, any args) {
 
     if(data == null) {
         json_cleanup_and_delete(obj);
-        // TODO: game end
+        forceEndGame();
         return;
     }
 
-    JSON_Array members = view_as<JSON_Array>(data.GetObject("members"));
-
     game.setData(data.GetInt("game_id"), data.GetInt("total_users"));
 
+    JSON_Array members = view_as<JSON_Array>(data.GetObject("members"));
+    
     for (int i = 0; i < members.Length; i++) {
         JSON_Array member = view_as<JSON_Array>(members.GetObject(i));
 
@@ -236,13 +263,13 @@ public int setGameDataFromHTTP(const char[] body, any args) {
     ServerCommand("mp_endwarmup_player_count %i", game.total_users);
 }
 
-public void OnClientAuthorized(int client, const char[] auth) {
+public void OnClientPutInServer(int client) {
+    if (!IsPlayer(client)) return;
+
     if (game.id == 0) {
         KickClient(client, "Your SteamID is not allowed");
         return;
     }
-
-    if (!IsPlayer(client)) return;
 
     int team = users.getDataByClient(client, "team");
 
@@ -266,15 +293,16 @@ public Action joingame(int client, const char[] command, args) {
 } 
 
 public Action RoundEnd(Event event, const char[] name, bool dontBroadcast) {
-    if (IsWarmup()) {
+    if (IsWarmup()) return;
+    
+    if (game.id == 0) {
+        forceEndGame();
         return;
     }
     
     game.sendScore();
 
-    if (isHalfTime()) {
-        game.switchTeams();
-    }
+    if (isHalfTime()) game.switchTeams();
 }
 
 public Action RoundStart(Event event, const char[] name, bool dontBroadcast) {
@@ -292,8 +320,7 @@ public Action RoundStart(Event event, const char[] name, bool dontBroadcast) {
 
 public Action GameEnd(Event event, const char[] name, bool dontBroadcast) {
     //У игры статус cancel
-    if (game.id == 0) {
-        return;
-    }
+    if (game.id == 0) return;
+
     game.end();
 }
