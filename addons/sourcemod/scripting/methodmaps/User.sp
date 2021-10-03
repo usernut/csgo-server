@@ -1,17 +1,35 @@
-methodmap User < JSON_Object {    
-    public User() {
-        return view_as<User>(new JSON_Object());
+#include "methodmaps/BanTimer.sp"
+#include "methodmaps/Stats.sp"
+
+methodmap User < StringMap {    
+    public User(int team, int user_id, char[] steamid) {
+        User self = view_as<User>(new StringMap());
+        BanTimer ban_timer = new BanTimer();
+        Stats stats = new Stats();
+
+        self.SetValue("team", team);
+        self.SetValue("user_id", user_id);
+        self.SetString("steamid", steamid);
+
+        self.SetValue("stats", stats);
+        self.SetValue("ban_timer", ban_timer);
+        
+        return self;
     }
 
     property int team {
         public get() {
-            return this.GetInt("team");
+            int team;
+            this.GetValue("team", team);
+            return team;
         }
     }
 
     property int user_id {
         public get() {
-            return this.GetInt("user_id");
+            int user_id;
+            this.GetValue("user_id", user_id);
+            return user_id;
         }
     }
 
@@ -19,7 +37,19 @@ methodmap User < JSON_Object {
         return this.GetString("steamid", buffer, max_size);
     }
 
-    public int getIntPropertyByName(char[] prop) {
-        return this.GetInt(prop);
+    property BanTimer ban_timer {
+        public get() {
+            BanTimer ban_timer;
+            this.GetValue("ban_timer", ban_timer);
+            return ban_timer;
+        }
+    }
+
+    property Stats stats {
+        public get() {
+            Stats stats;
+            this.GetValue("stats", stats);
+            return stats;
+        }
     }
 }
