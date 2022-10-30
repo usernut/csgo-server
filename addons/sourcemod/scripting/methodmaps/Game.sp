@@ -11,7 +11,7 @@ methodmap Game < StringMap {
         self.SetValue("users", users);
         self.SetValue("http", http);
 
-        self.SetValue("status", 0); // 0 - warmup, 1 - started
+        self.SetValue("status", 0); // 0 - warmup, 1 - started, 2 - cancel, 3 - surrender
 
         return self;
     }
@@ -95,14 +95,15 @@ methodmap Game < StringMap {
     public void start() {
         char json[128];
         
-        if(this.id == 0) return;
+        if (this.id == 0) return;
 
         Format(json, sizeof(json), "{\"t\":2,\"data\":{\"game_id\": %i}}", this.id);
         this.http.post(json, defaultCallback);
 
         this.status = 1;
 
-        PrintToChatAll("Игра началась");
+        PrintToChatAll("The game has begun");
+        SetConVarInt(FindConVar("mp_autokick"), 1);
     }
     /* Остановка матча */
     public void cancel() {
@@ -115,7 +116,8 @@ methodmap Game < StringMap {
         this.http.post(json, defaultCallback); 
 
         forceEndGame();
-        KickAllPlayers(15.0, "Game canceled"); 
+        PrintToChatAll("\x01 \x07Some players failed to join, the match has been cancelled")
+        KickAllPlayers(15.0, "The match has been cancelled"); 
     }
 
     public void startOrCancel() {
@@ -123,8 +125,8 @@ methodmap Game < StringMap {
             this.cancel();
             return;
         }
-        SetConVarInt(FindConVar("mp_autokick"), 1);
         this.start();
+        // GetRealClientsCount() != this.total_users ? this.cancel() : this.start();
     }
 
     public void end() { //TODO: исправить
@@ -162,5 +164,9 @@ methodmap Game < StringMap {
         char json[128];
         Format(json, sizeof(json), "{\"t\":3,\"data\":{\"game_id\": %i,\"scores\": [%i, %i]}}", this.id, score.Get(0), score.Get(1));
         this.http.post(json, defaultCallback);
+    }
+
+    public void sendBan() {
+
     }
 }

@@ -5,8 +5,20 @@ methodmap BanTimer < StringMap {
         self.SetString("nickname", "");
         self.SetString("steamid64", "");
         self.SetValue("time", 5);
+        self.SetValue("banned", false);
 
         return self;
+    }
+
+    property bool banned {
+        public get() {
+            bool banned;
+            this.GetValue("banned", banned);
+            return banned;
+        }
+        public set(bool banned) {
+            this.SetValue("banned", banned);
+        }
     }
 
     property int time {
@@ -41,6 +53,9 @@ methodmap BanTimer < StringMap {
     }
 
     public void ban() {
+        this.Remove("timer");
+        this.banned = true;
+
         char nickname[32];
         this.GetString("nickname", nickname, sizeof(nickname));
 
@@ -53,7 +68,7 @@ methodmap BanTimer < StringMap {
     }
 
     public void start(int client) {
-        if (this.timer) return;
+        if (this.timer || this.banned) return;
 
         this.time = 5;
         
@@ -76,19 +91,5 @@ methodmap BanTimer < StringMap {
         KillTimer(this.timer);
 
         this.Remove("timer");
-        this.SetValue("time", 0);
     }
-}
-
-public Action Timer_BanUser(Handle timer, BanTimer self) {
-    if (self.time <= 0) {
-        self.ban()
-        self.Remove("timer");
-
-        return Plugin_Stop;
-    }
-
-    self.alert();
-    
-    return Plugin_Continue;
 }

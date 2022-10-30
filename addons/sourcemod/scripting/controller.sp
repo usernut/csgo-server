@@ -62,9 +62,53 @@ public Action test(int client, int args) {
 
     // PrintToServer("pizda %s", json);
 
-    BanClient(client, 1, BANFLAG_AUTHID, "ss", "ss");
+    BanClient(client, 1, BANFLAG_AUTHID, "ss", "sss");
+}
+// nothing: 
+// ban-timer: other
+public Action PlayerDisconnect(Event event, const char[] name, bool dontBroadcast) {
+    int client = GetClientOfUserId(event.GetInt("userid"));
+
+    if (!IsPlayer(client) || IsWarmup() || game.id == 0) return;
+    
+    User user = game.users.getUser(client);
+
+    if (!user) return;
+   
+    user.stats.update(client);
+
+    char reason[64];
+    char nickname[32];
+
+    GetEventString(event, "reason", reason, sizeof(reason));
+    GetEventString(event, "name", nickname, sizeof(nickname));
+
+    /////////////////
+    PrintToServer("%s", reason);
+    ////////////////
+    
+    // if (reason == "Кикнут" || reason == "Я забанил") return;
+    
+    if (StrEqual(reason, "Kicked by Console : For suiciding too many times") || StrEqual(reason, "Kicked by Console : For doing too much team damage")) {
+        game.sendBan();
+        return;
+    }
+    
+    user.ban_timer.start(client);
 }
 
+public Action Timer_BanUser(Handle timer, BanTimer self) {
+    if (self.time <= 0) {
+        self.ban();
+        //TODO: Отправить данные на сервер и установить статус banned.
+
+        return Plugin_Stop;
+    }
+
+    self.alert();
+    
+    return Plugin_Continue;
+}
 
 public int setGameDataFromHTTP(const char[] body, any args) {
     PrintToServer("%s", body);
@@ -164,4 +208,8 @@ public Action GameEnd(Event event, const char[] name, bool dontBroadcast) {
     if (game.id == 0) return;
 
     game.end();
+
+    // if (game.status == 1) game.end();
+    // else if (game.status == 2) game.cancel();
+    // else if (game.status == 3) game.surrender();
 }

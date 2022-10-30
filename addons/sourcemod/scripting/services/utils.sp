@@ -94,21 +94,3 @@ public bool isHalfTime() {
 //   Call_PushString(g_DemoFileName);
 //   Call_Finish();
 // }
-
-
-// public void UpdatePlayerStats() {
-// 	int iEnt = FindEntityByClassname(-1, "cs_player_manager"); // GetPlayerResourceEntity()
-// 	for(int i = 1; i <= MaxClients; i++) {
-// 		if(!IsValidClient(i)) continue;
-
-// 		int kills = GetEntProp(iEnt, Prop_Send, "m_iKills", _, i);
-// 		int deaths = GetEntProp(iEnt, Prop_Send, "m_iDeaths", _, i);
-// 		int MVPs = GetEntProp(iEnt, Prop_Send, "m_iMVPs", _, i);
-//         int hs = GetEntProp(iEnt, Prop_Send, "m_iMatchStats_HeadShotKills_Total", _, i);
-
-// 	}
-// }
-
-// public void OnClientPutInServer(int client) {
-//     KickClient(client, "Join Our New IP: XXX.XXX.XXX.XXX");
-// }
